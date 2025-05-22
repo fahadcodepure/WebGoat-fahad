@@ -1,0 +1,46 @@
+name: Codepure DevSecOps Scan
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  codepure_scan:
+    name: Run Codepure SAST Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Trigger SAST scan in Codepure
+      run: |
+        echo "🔁 Triggering scan..."
+        curl -s -X POST http://100.73.201.73:3000/api/trigger_me \
+          -H "Content-Type: application/json" \
+          -d '{
+            "ProjectName": "webgoat-fahad",
+            "engines": ["SAST"],
+            "commit_hash": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "triggered_by": "github",
+            "mode": "devsecops"
+          }'
+
+    - name: Wait for approval from Codepure
+      run: |
+        echo "⏳ Polling status..."
+        for i in {1..15}; do
+          STATUS=$(curl -s "http://100.73.201.73:3000/api/commitStatus?project_name=webgoat-fahad&commit_hash=${{ github.sha }}" | jq -r '.status')
+          echo "🔎 Status: $STATUS"
+          if [[ "$STATUS" == "approved" ]]; then
+            echo "✅ Approved."
+            exit 0
+          elif [[ "$STATUS" == "failed" ]]; then
+            echo "❌ Scan failed due to policy violation."
+            exit 1
+          fi
+          sleep 10
+        done
+        echo "❌ Timeout waiting for approval."
+        exit 1
+
