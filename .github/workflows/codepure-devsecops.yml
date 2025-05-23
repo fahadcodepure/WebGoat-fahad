@@ -64,7 +64,16 @@ jobs:
       - name: Block if any vulnerabilities found
         run: |
           echo "🔍 Evaluating scan summary..."
-          VULN_COUNT=$(jq '[.data.summary[] | .count] | add' codepure_result.json)
+
+          # Check if bugs array exists and is an array
+          if ! jq -e '.bugs | type == "array"' codepure_result.json > /dev/null; then
+            echo "⚠️  'bugs' field is missing or not an array in response."
+            echo "🚨 Full response:"
+            cat codepure_result.json
+            exit 1
+          fi
+
+          VULN_COUNT=$(jq '[.bugs[] | .count] | add' codepure_result.json)
           echo "🔢 Total vulnerabilities: $VULN_COUNT"
 
           if [ "$VULN_COUNT" -gt 0 ]; then
@@ -73,7 +82,7 @@ jobs:
             jq -r '.dashboard' codepure_result.json
 
             echo "📊 Vulnerability Summary:"
-            jq -r '.summary[] | "• \(.bug_name): \(.count)"' codepure_result.json
+            jq -r '.bugs[] | "• \(.bug_name): \(.count) [Severity: \(.severity)]"' codepure_result.json
 
             exit 1
           else
