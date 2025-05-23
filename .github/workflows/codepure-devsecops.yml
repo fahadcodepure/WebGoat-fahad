@@ -27,16 +27,17 @@ jobs:
       - name: Validate CODEPURE_API_TOKEN secret
         run: |
           if [ -z "${{ secrets.CODEPURE_API_TOKEN }}" ]; then
-            echo "CODEPURE_API_TOKEN is missing"
+            echo "❌ CODEPURE_API_TOKEN is missing"
             exit 1
           else
-            echo "CODEPURE_API_TOKEN is available"
+            echo "✅ CODEPURE_API_TOKEN is available"
           fi
 
-      - name: Trigger DevSecOps scan in Codepure
+      - name: Trigger DevSecOps scan and capture summary
+        id: codepure
         run: |
           echo "Triggering scan..."
-          curl -v -X POST http://100.73.201.73:3000/api/github/devsecops/commit \
+          curl -s -X POST http://100.73.201.73:3000/api/github/devsecops/commit \
             -H "Content-Type: application/json" \
             -H "Authorization: Token ${{ secrets.CODEPURE_API_TOKEN }}" \
             --data-raw "$(jq -n \
@@ -55,4 +56,20 @@ jobs:
                 project_name: $project_name,
                 language: $language,
                 triggered_by: $triggered_by
-              }')"
+              }')" > codepure_result.json
+
+          cat codepure_result.json
+
+      - name: Block if any vulnerabilities found
+        run: |
+          echo "Evaluating scan summary..."
+          VULN_COUNT=$(jq '[.summary[] | .count] | add' codepure_result.json)
+          echo "Total vulnerabilities: $VULN_COUNT"
+
+          if [ "$VULN_COUNT" -gt 0 ]; then
+            echo "❌ Vulnerabilities found. Blocking merge."
+            jq -r '.dashboard' codepure_result.json
+            exit 1
+          else
+            echo "✅ No vulnerabilities found."
+          fi
