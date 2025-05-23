@@ -10,7 +10,7 @@ on:
 jobs:
   codepure_scan:
     name: Run Codepure SAST Scan
-    runs-on: self-hosted  # ✅ Make sure this runner is inside Tailscale
+    runs-on: self-hosted  # ✅ Ensure this runner is Tailscale-accessible
 
     steps:
     - name: 🧪 Debug: Print Git info
@@ -20,29 +20,29 @@ jobs:
         echo "🔧 Actor: ${{ github.actor }}"
         echo "🕒 Time: $(date)"
 
-    - name: 🔐 Debug: Show if secret is available (just for test, don't print real token)
+    - name: 🔐 Debug: Check if CODEPURE_API_TOKEN secret exists
       run: |
         if [ -z "${{ secrets.CODEPURE_API_TOKEN }}" ]; then
           echo "❌ CODEPURE_API_TOKEN is missing!"
           exit 1
         else
-          echo "✅ CODEPURE_API_TOKEN is present"
+          echo "✅ CODEPURE_API_TOKEN is available"
         fi
 
     - name: 🚀 Trigger DevSecOps scan in Codepure
       run: |
-        echo "📡 Triggering scan with commit ${{ github.sha }}"
+        echo "📡 Triggering DevSecOps scan..."
         curl -v -X POST http://100.73.201.73:3000/api/github/devsecops/commit \
           -H "Content-Type: application/json" \
           -H "Authorization: Token ${{ secrets.CODEPURE_API_TOKEN }}" \
           --data-raw "$(jq -n \
-            --arg repo_name "WebGoat-fahad" \
-            --arg owner "codepureteam" \
-            --arg branch "${{ github.ref_name }}" \
-            --arg commit_hash "${{ github.sha }}" \
-            --arg project_name "WebGoat-fahad" \
-            --arg language "js" \
-            --arg triggered_by "github" \
+            --arg repo_name 'WebGoat-fahad' \
+            --arg owner 'codepureteam' \
+            --arg branch '${{ github.ref_name }}' \
+            --arg commit_hash '${{ github.sha }}' \
+            --arg project_name 'WebGoat-fahad' \
+            --arg language 'js' \
+            --arg triggered_by 'github' \
             '{
               repo_name: $repo_name,
               owner: $owner,
