@@ -2,13 +2,9 @@ name: Codepure DevSecOps Scan
 
 on:
   push:
-    branches:
-      - main
-      - dev
+    branches: [main, dev]
   pull_request:
-    branches:
-      - main
-      - dev
+    branches: [main, dev]
   workflow_dispatch:
 
 jobs:
@@ -19,6 +15,7 @@ jobs:
     steps:
       - name: Print Git context info
         run: |
+          set +x
           echo "📍 Branch: ${{ github.ref_name }}"
           echo "📦 Commit SHA: ${{ github.sha }}"
           echo "👤 Actor: ${{ github.actor }}"
@@ -26,6 +23,7 @@ jobs:
 
       - name: Validate CODEPURE_API_TOKEN secret
         run: |
+          set +x
           if [ -z "${{ secrets.CODEPURE_API_TOKEN }}" ]; then
             echo "❌ CODEPURE_API_TOKEN is missing"
             exit 1
@@ -36,6 +34,7 @@ jobs:
       - name: Trigger DevSecOps scan and capture summary
         id: codepure
         run: |
+          set +x
           echo "🚀 Triggering Codepure scan..."
           curl -s -X POST http://100.73.201.73:3000/api/github/devsecops/commit \
             -H "Content-Type: application/json" \
@@ -63,9 +62,9 @@ jobs:
 
       - name: Block if any vulnerabilities found
         run: |
+          set +x
           echo "🔍 Evaluating scan summary..."
 
-          # Check if summary array exists and is an array
           if ! jq -e '.summary | type == "array"' codepure_result.json > /dev/null; then
             echo "⚠️  'summary' field is missing or not an array in response."
             echo "🚨 Full response:"
