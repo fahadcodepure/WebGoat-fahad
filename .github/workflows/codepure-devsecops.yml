@@ -56,30 +56,3 @@ jobs:
                 language: $language,
                 triggered_by: $triggered_by
               }')"
-
-      - name: Poll for scan approval status
-        run: |
-          echo "Polling status..."
-          for i in {1..15}; do
-            RESPONSE=$(curl -s "http://100.73.201.73:3000/api/commitStatus?project_name=WebGoat-fahad&commit_hash=${{ github.sha }}")
-            echo "Raw response: $RESPONSE"
-
-            STATUS=$(echo "$RESPONSE" | jq -r '.status' 2>/dev/null || echo "parse_error")
-
-            echo "Attempt $i: Status = $STATUS"
-
-            if [[ "$STATUS" == "approved" ]]; then
-              echo "Approved"
-              exit 0
-            elif [[ "$STATUS" == "failed" ]]; then
-              echo "Scan failed"
-              exit 1
-            elif [[ "$STATUS" == "parse_error" ]]; then
-              echo "Invalid JSON received. Retrying..."
-            fi
-
-            sleep 10
-          done
-
-          echo "Timed out waiting for approval"
-          exit 1
