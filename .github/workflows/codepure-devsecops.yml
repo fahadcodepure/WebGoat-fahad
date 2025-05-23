@@ -19,10 +19,10 @@ jobs:
     steps:
       - name: Print Git context info
         run: |
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit SHA: ${{ github.sha }}"
-          echo "Actor: ${{ github.actor }}"
-          echo "Timestamp: $(date)"
+          echo "📍 Branch: ${{ github.ref_name }}"
+          echo "📦 Commit SHA: ${{ github.sha }}"
+          echo "👤 Actor: ${{ github.actor }}"
+          echo "🕒 Timestamp: $(date)"
 
       - name: Validate CODEPURE_API_TOKEN secret
         run: |
@@ -36,7 +36,7 @@ jobs:
       - name: Trigger DevSecOps scan and capture summary
         id: codepure
         run: |
-          echo "Triggering scan..."
+          echo "🚀 Triggering Codepure scan..."
           curl -s -X POST http://100.73.201.73:3000/api/github/devsecops/commit \
             -H "Content-Type: application/json" \
             -H "Authorization: Token ${{ secrets.CODEPURE_API_TOKEN }}" \
@@ -58,18 +58,24 @@ jobs:
                 triggered_by: $triggered_by
               }')" > codepure_result.json
 
+          echo "✅ Codepure response:"
           cat codepure_result.json
 
       - name: Block if any vulnerabilities found
         run: |
-          echo "Evaluating scan summary..."
+          echo "🔍 Evaluating scan summary..."
           VULN_COUNT=$(jq '[.summary[] | .count] | add' codepure_result.json)
-          echo "Total vulnerabilities: $VULN_COUNT"
+          echo "🔢 Total vulnerabilities: $VULN_COUNT"
 
           if [ "$VULN_COUNT" -gt 0 ]; then
             echo "❌ Vulnerabilities found. Blocking merge."
+            echo "🔗 Visit dashboard:"
             jq -r '.dashboard' codepure_result.json
+
+            echo "📊 Vulnerability Summary:"
+            jq -r '.summary[] | "• \(.bug_name): \(.count)"' codepure_result.json
+
             exit 1
           else
-            echo "✅ No vulnerabilities found."
+            echo "✅ No vulnerabilities found. Merge allowed."
           fi
