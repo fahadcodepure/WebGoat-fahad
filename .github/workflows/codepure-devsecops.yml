@@ -41,11 +41,11 @@ jobs:
             -H "Authorization: Token ${{ secrets.CODEPURE_API_TOKEN }}" \
             --data-raw "$(jq -n \
               --arg repo_name 'WebGoat-fahad' \
-              --arg owner 'codepureteam' \
+              --arg owner 'fahadcodepure' \
               --arg branch '${{ github.ref_name }}' \
               --arg commit_hash '${{ github.sha }}' \
               --arg project_name 'WebGoat-fahad' \
-              --arg language 'js' \
+              --arg language 'java' \
               --arg triggered_by 'github' \
               '{
                 repo_name: $repo_name,
