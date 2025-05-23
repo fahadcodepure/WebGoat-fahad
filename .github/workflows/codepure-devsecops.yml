@@ -12,25 +12,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Trigger SAST scan in Codepure
+    - name: Trigger DevSecOps scan in Codepure
       run: |
-        echo "🔁 Triggering scan..."
-        curl -s -X POST http://100.73.201.73:3000/api/trigger_me \
+        echo "🔁 Triggering DevSecOps scan..."
+        curl -s -X POST http://100.73.201.73:3000/api/github/devsecops/commit \
           -H "Content-Type: application/json" \
+          -H "Authorization: Token ${{ secrets.CODEPURE_API_TOKEN }}" \
           -d '{
-            "ProjectName": "webgoat-fahad",
-            "engines": ["SAST"],
-            "commit_hash": "${{ github.sha }}",
+            "repo_name": "WebGoat-fahad",
+            "owner": "codepureteam",
             "branch": "${{ github.ref_name }}",
-            "triggered_by": "github",
-            "mode": "devsecops"
+            "commit_hash": "${{ github.sha }}",
+            "project_name": "WebGoat-fahad",
+            "language": "js",
+            "triggered_by": "github"
           }'
 
     - name: Wait for approval from Codepure
       run: |
-        echo "⏳ Polling status..."
+        echo "⏳ Polling scan status..."
         for i in {1..15}; do
-          STATUS=$(curl -s "http://100.73.201.73:3000/api/commitStatus?project_name=webgoat-fahad&commit_hash=${{ github.sha }}" | jq -r '.status')
+          STATUS=$(curl -s "http://100.73.201.73:3000/api/commitStatus?project_name=WebGoat-fahad&commit_hash=${{ github.sha }}" | jq -r '.status')
           echo "🔎 Status: $STATUS"
           if [[ "$STATUS" == "approved" ]]; then
             echo "✅ Approved."
@@ -43,4 +45,3 @@ jobs:
         done
         echo "❌ Timeout waiting for approval."
         exit 1
-
