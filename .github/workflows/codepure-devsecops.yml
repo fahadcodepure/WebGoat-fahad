@@ -5,43 +5,68 @@ on:
     branches: [ "main", "dev" ]
   pull_request:
     branches: [ "main", "dev" ]
+  workflow_dispatch:
 
 jobs:
   codepure_scan:
     name: Run Codepure SAST Scan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted  # ✅ Make sure this runner is inside Tailscale
 
     steps:
-    - name: Trigger DevSecOps scan in Codepure
+    - name: 🧪 Debug: Print Git info
       run: |
-        echo "🔁 Triggering DevSecOps scan..."
-        curl -s -X POST http://100.73.201.73:3000/api/github/devsecops/commit \
+        echo "📍 Branch: ${{ github.ref_name }}"
+        echo "🔁 Commit SHA: ${{ github.sha }}"
+        echo "🔧 Actor: ${{ github.actor }}"
+        echo "🕒 Time: $(date)"
+
+    - name: 🔐 Debug: Show if secret is available (just for test, don't print real token)
+      run: |
+        if [ -z "${{ secrets.CODEPURE_API_TOKEN }}" ]; then
+          echo "❌ CODEPURE_API_TOKEN is missing!"
+          exit 1
+        else
+          echo "✅ CODEPURE_API_TOKEN is present"
+        fi
+
+    - name: 🚀 Trigger DevSecOps scan in Codepure
+      run: |
+        echo "📡 Triggering scan with commit ${{ github.sha }}"
+        curl -v -X POST http://100.73.201.73:3000/api/github/devsecops/commit \
           -H "Content-Type: application/json" \
           -H "Authorization: Token ${{ secrets.CODEPURE_API_TOKEN }}" \
-          -d '{
-            "repo_name": "WebGoat-fahad",
-            "owner": "codepureteam",
-            "branch": "${{ github.ref_name }}",
-            "commit_hash": "${{ github.sha }}",
-            "project_name": "WebGoat-fahad",
-            "language": "js",
-            "triggered_by": "github"
-          }'
+          --data-raw "$(jq -n \
+            --arg repo_name "WebGoat-fahad" \
+            --arg owner "codepureteam" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg commit_hash "${{ github.sha }}" \
+            --arg project_name "WebGoat-fahad" \
+            --arg language "js" \
+            --arg triggered_by "github" \
+            '{
+              repo_name: $repo_name,
+              owner: $owner,
+              branch: $branch,
+              commit_hash: $commit_hash,
+              project_name: $project_name,
+              language: $language,
+              triggered_by: $triggered_by
+            }')"
 
-    - name: Wait for approval from Codepure
+    - name: 🕒 Wait for approval from Codepure
       run: |
-        echo "⏳ Polling scan status..."
+        echo "🔁 Polling scan approval status..."
         for i in {1..15}; do
           STATUS=$(curl -s "http://100.73.201.73:3000/api/commitStatus?project_name=WebGoat-fahad&commit_hash=${{ github.sha }}" | jq -r '.status')
-          echo "🔎 Status: $STATUS"
+          echo "🔍 Attempt $i: Status = $STATUS"
           if [[ "$STATUS" == "approved" ]]; then
-            echo "✅ Approved."
+            echo "✅ Approved by Codepure"
             exit 0
           elif [[ "$STATUS" == "failed" ]]; then
-            echo "❌ Scan failed due to policy violation."
+            echo "❌ Scan failed: policy violation or unapproved"
             exit 1
           fi
           sleep 10
         done
-        echo "❌ Timeout waiting for approval."
+        echo "⏰ Timeout waiting for approval"
         exit 1
