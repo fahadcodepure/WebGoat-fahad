@@ -1,4 +1,4 @@
-name: Codepure DevSecOps Scan
+name: Codepure DevSecOps Pipeline
 
 on:
   push:
@@ -7,46 +7,50 @@ on:
     branches: [main, dev]
   workflow_dispatch:
 
+env:
+  CODEPURE_API: "http://100.73.201.73:3000"
+  CODEPURE_PROJECT: "WebGoat-fahad"
+  CODEPURE_LANGUAGE: "java"
+  CODEPURE_OWNER: "fahadcodepure"
+  CODEPURE_REPO: "WebGoat-fahad"
+  CODEPURE_TRIGGER: "github"
+
 jobs:
-  codepure_scan:
-    name: Run Codepure SAST Scan
+  sast_scan:
+    name: 🔍 Stage 1 — SAST Scan
     runs-on: self-hosted
 
     steps:
-      - name: Print Git context info
+      - name: Print context
         run: |
-          set +x
           echo "📍 Branch: ${{ github.ref_name }}"
-          echo "📦 Commit SHA: ${{ github.sha }}"
+          echo "📦 Commit: ${{ github.sha }}"
           echo "👤 Actor: ${{ github.actor }}"
           echo "🕒 Timestamp: $(date)"
 
-      - name: Validate CODEPURE_API_TOKEN secret
+      - name: Validate API Token
         run: |
-          set +x
           if [ -z "${{ secrets.CODEPURE_API_TOKEN }}" ]; then
-            echo "❌ CODEPURE_API_TOKEN is missing"
+            echo "❌ Missing CODEPURE_API_TOKEN"
             exit 1
-          else
-            echo "✅ CODEPURE_API_TOKEN is available"
           fi
+          echo "✅ CODEPURE_API_TOKEN is present"
 
-      - name: Trigger DevSecOps scan and capture summary
-        id: codepure
+      - name: 🚀 Trigger SAST Scan
+        id: sast
         run: |
-          set +x
-          echo "🚀 Triggering Codepure scan..."
-          curl -s -X POST http://100.73.201.73:3000/api/github/devsecops/commit \
+          curl -s -X POST "${{ env.CODEPURE_API }}/api/github/devsecops/commit" \
             -H "Content-Type: application/json" \
             -H "Authorization: Token ${{ secrets.CODEPURE_API_TOKEN }}" \
             --data-raw "$(jq -n \
-              --arg repo_name 'WebGoat-fahad' \
-              --arg owner 'fahadcodepure' \
+              --arg engine "SAST" \
+              --arg repo_name '${{ env.CODEPURE_REPO }}' \
+              --arg owner '${{ env.CODEPURE_OWNER }}' \
               --arg branch '${{ github.ref_name }}' \
               --arg commit_hash '${{ github.sha }}' \
-              --arg project_name 'WebGoat-fahad' \
-              --arg language 'java' \
-              --arg triggered_by 'github' \
+              --arg project_name '${{ env.CODEPURE_PROJECT }}' \
+              --arg language '${{ env.CODEPURE_LANGUAGE }}' \
+              --arg triggered_by '${{ env.CODEPURE_TRIGGER }}' \
               '{
                 repo_name: $repo_name,
                 owner: $owner,
@@ -54,36 +58,78 @@ jobs:
                 commit_hash: $commit_hash,
                 project_name: $project_name,
                 language: $language,
-                triggered_by: $triggered_by
-              }')" > codepure_result.json
+                triggered_by: $triggered_by,
+                engines: [$engine]
+              }')" > sast_result.json
 
-          echo "✅ Codepure response:"
-          cat codepure_result.json
-
-      - name: Block if any vulnerabilities found
+      - name: Evaluate SAST Results
         run: |
-          set +x
-          echo "🔍 Evaluating scan summary..."
-
-          if ! jq -e '.summary | type == "array"' codepure_result.json > /dev/null; then
-            echo "⚠️  'summary' field is missing or not an array in response."
-            echo "🚨 Full response:"
-            cat codepure_result.json
+          if ! jq -e '.summary | type == "array"' sast_result.json > /dev/null; then
+            echo "❌ Invalid SAST scan result"
+            cat sast_result.json
             exit 1
           fi
 
-          VULN_COUNT=$(jq '[.summary[] | .count] | add' codepure_result.json)
-          echo "🔢 Total vulnerabilities: $VULN_COUNT"
+          VULN_COUNT=$(jq '[.summary[] | .count] | add' sast_result.json)
+          echo "🔢 SAST vulnerabilities: $VULN_COUNT"
 
           if [ "$VULN_COUNT" -gt 0 ]; then
-            echo "❌ Vulnerabilities found. Blocking merge."
-            echo "🔗 Visit dashboard:"
-            jq -r '.dashboard' codepure_result.json
-
-            echo "📊 Vulnerability Summary:"
-            jq -r '.summary[] | "• \(.bug_name): \(.count) [Severity: \(.severity)]"' codepure_result.json
-
+            echo "🚨 SAST failed. Blocking further stages."
+            jq -r '.summary[] | "• \(.bug_name): \(.count) [\(.severity)]"' sast_result.json
+            jq -r '.dashboard' sast_result.json
             exit 1
           else
-            echo "✅ No vulnerabilities found. Merge allowed."
+            echo "✅ SAST passed."
+          fi
+
+  secret_scan:
+    name: 🔐 Stage 2 — Secret Scanning
+    needs: sast_scan
+    runs-on: self-hosted
+
+    steps:
+      - name: 🚀 Trigger Secret Scan
+        id: secrets
+        run: |
+          curl -s -X POST "${{ env.CODEPURE_API }}/api/github/devsecops/commit" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Token ${{ secrets.CODEPURE_API_TOKEN }}" \
+            --data-raw "$(jq -n \
+              --arg engine "SECRETS" \
+              --arg repo_name '${{ env.CODEPURE_REPO }}' \
+              --arg owner '${{ env.CODEPURE_OWNER }}' \
+              --arg branch '${{ github.ref_name }}' \
+              --arg commit_hash '${{ github.sha }}' \
+              --arg project_name '${{ env.CODEPURE_PROJECT }}' \
+              --arg language '${{ env.CODEPURE_LANGUAGE }}' \
+              --arg triggered_by '${{ env.CODEPURE_TRIGGER }}' \
+              '{
+                repo_name: $repo_name,
+                owner: $owner,
+                branch: $branch,
+                commit_hash: $commit_hash,
+                project_name: $project_name,
+                language: $language,
+                triggered_by: $triggered_by,
+                engines: [$engine]
+              }')" > secrets_result.json
+
+      - name: Evaluate Secret Scan Results
+        run: |
+          if ! jq -e '.summary | type == "array"' secrets_result.json > /dev/null; then
+            echo "❌ Invalid Secret scan result"
+            cat secrets_result.json
+            exit 1
+          fi
+
+          VULN_COUNT=$(jq '[.summary[] | .count] | add' secrets_result.json)
+          echo "🔢 Secret findings: $VULN_COUNT"
+
+          if [ "$VULN_COUNT" -gt 0 ]; then
+            echo "🚨 Secret scan failed. Blocking pipeline."
+            jq -r '.summary[] | "• \(.bug_name): \(.count) [\(.severity)]"' secrets_result.json
+            jq -r '.dashboard' secrets_result.json
+            exit 1
+          else
+            echo "✅ Secret scan passed."
           fi
